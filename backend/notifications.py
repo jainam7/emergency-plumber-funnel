@@ -61,21 +61,24 @@ def send_lead_sms(name: str, phone: str, issue: str, source: Optional[str] = Non
         account_sid = os.environ["TWILIO_ACCOUNT_SID"].strip()
         auth_token = os.environ["TWILIO_AUTH_TOKEN"].strip()
         from_value = os.environ["TWILIO_FROM_NUMBER"].strip()
-        to_number = os.environ["DISPATCH_PHONE_NUMBER"].strip()
+        
+        # Split comma-separated numbers and remove whitespace
+        raw_to = os.environ["DISPATCH_PHONE_NUMBER"]
+        to_numbers = [n.strip() for n in raw_to.split(",") if n.strip()]
 
         client = Client(account_sid, auth_token)
         body = _build_message(name, phone, issue, source)
 
-        kwargs = {"to": to_number, "body": body}
-        if from_value.startswith("MG"):
-            # Messaging Service SID
-            kwargs["messaging_service_sid"] = from_value
-        else:
-            kwargs["from_"] = from_value
+        for to_number in to_numbers:
+            kwargs = {"to": to_number, "body": body}
+            if from_value.startswith("MG"):
+                # Messaging Service SID
+                kwargs["messaging_service_sid"] = from_value
+            else:
+                kwargs["from_"] = from_value
 
-        msg = client.messages.create(**kwargs)
-        # Never log the auth token or the full body. SID is fine to log.
-        logger.info("Twilio SMS dispatched sid=%s status=%s to=%s", msg.sid, msg.status, to_number)
+            msg = client.messages.create(**kwargs)
+            logger.info("Twilio SMS dispatched sid=%s status=%s to=%s", msg.sid, msg.status, to_number)
     except Exception as e:  # noqa: BLE001
         # Includes TwilioRestException; swallow so lead capture is never blocked.
         logger.exception("Twilio SMS failed: %s", type(e).__name__)

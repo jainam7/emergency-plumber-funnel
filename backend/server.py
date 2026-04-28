@@ -6,6 +6,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 import os
 import logging
+from contextlib import asynccontextmanager
 import uuid
 import bcrypt
 import jwt
@@ -27,12 +28,53 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------- Mongo ----------
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+def get_database():
+    url = os.environ.get("MONGO_URL")
+    db_name = os.environ.get("DB_NAME", "true_north_plumbing")
+    if not url:
+        logger.error("MONGO_URL not found in environment variables")
+        raise RuntimeError("MONGO_URL missing")
+    
+    # Connect with a reasonable timeout for production
+    client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=5000)
+    return client, client[db_name]
+
+client, db = get_database()
+
+# ---------- Lifespan (Modern FastAPI Startup/Shutdown) ----------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Ensure indexes and seed admin
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.login_attempts.create_index("identifier")
+        await db.leads.create_index("created_at")
+        logger.info("Database indexes verified")
+    except Exception:
+        logger.exception("Failed to create indexes")
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if admin_email and admin_password:
+        existing = await db.users.find_one({"email": admin_email})
+        if existing is None:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "email": admin_email,
+                "password_hash": hash_password(admin_password),
+                "name": "Admin",
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"Seeded admin user: {admin_email}")
+    
+    yield
+    # Shutdown
+    client.close()
+    logger.info("Database connection closed")
 
 # ---------- App / router ----------
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 
 # ---------- Auth helpers ----------
@@ -327,43 +369,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ---------- Startup: indexes + admin seed ----------
-@app.on_event("startup")
-async def on_startup():
-    try:
-        await db.users.create_index("email", unique=True)
-        await db.login_attempts.create_index("identifier")
-        await db.leads.create_index("created_at")
-    except Exception:
-        logger.exception("Failed to create indexes")
-
-    admin_email = os.environ.get("ADMIN_EMAIL", "").lower().strip()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "")
-    if not admin_email or not admin_password:
-        logger.warning("ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping admin seed")
-        return
-
-    existing = await db.users.find_one({"email": admin_email})
-    if existing is None:
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": admin_email,
-            "password_hash": hash_password(admin_password),
-            "name": "Admin",
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info(f"Seeded admin user: {admin_email}")
-    elif not verify_password(admin_password, existing.get("password_hash", "")):
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
-        )
-        logger.info(f"Updated admin password for {admin_email}")
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
