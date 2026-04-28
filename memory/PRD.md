@@ -24,11 +24,11 @@ Single-page, mobile-first, CRO-focused landing page for True North Plumbing (Cal
 - Final CTA section "Need a Plumber Right Now?" with second pulsing orange button
 - Minimal dark footer with copyright text per spec
 - Shadcn Dialog lead form (name, phone, issue) — POSTs to `/api/leads`, success state with click-to-call
-- All orange CTAs carry `ai-chat-trigger` class
-- Bottom-right corner kept free for chat widget
-- Mobile-first responsive (validated at 390px)
-- Lightweight CSS animations (cta-pulse, float-in) — respect `prefers-reduced-motion`
-- Tested: 100% backend (8/8 pytest), 100% frontend E2E
+- Scripted **chat widget** (floating orange bubble, bottom-right) — multi-step flow with typing indicator
+- All orange CTAs carry `ai-chat-trigger` class and now open the chat widget
+- **Auth + Admin panel (Dec 2025)** — JWT auth (PyJWT + bcrypt), seeded admin from `.env`, `/admin/login` + `/admin` dashboard with leads table, status workflow (new/contacted/booked/lost), filter tiles, search, mobile cards, per-account brute-force lockout (5 fails / 15 min)
+- Mobile-first responsive (validated at 390px); lightweight CSS animations (cta-pulse, float-in) — respect `prefers-reduced-motion`
+- Tested: 3 testing-agent iterations; all 100% green after the brute-force fix
 
 ## Backlog (P1 / P2)
 - P1: Hook a real chat widget into `.ai-chat-trigger` (code already wired)

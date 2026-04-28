@@ -204,8 +204,8 @@ async def create_lead(payload: LeadCreate):
 @api_router.post("/auth/login", response_model=LoginResponse)
 async def login(payload: LoginRequest, request: Request):
     email = payload.email.lower().strip()
-    ip = request.client.host if request.client else "unknown"
-    identifier = f"{ip}:{email}"
+    # Per-account lockout (IP-based fails behind a load balancer that rotates source IPs).
+    identifier = f"email:{email}"
 
     await check_lockout(identifier)
 
