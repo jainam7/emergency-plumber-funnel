@@ -12,10 +12,12 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
+
+from notifications import send_lead_sms
 
 # ---------- Logging (configured early) ----------
 logging.basicConfig(
@@ -35,7 +37,8 @@ api_router = APIRouter(prefix="/api")
 
 # ---------- Auth helpers ----------
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_TTL_HOURS = 24 * 7  # 7-day admin session
+ACCESS_TOKEN_TTL_HOURS = 24  # 24-hour admin session
+REFRESH_TOKEN_TTL_DAYS = 30  # refresh token lifetime
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_WINDOW_MINUTES = 15
 
@@ -59,6 +62,15 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
         "role": role,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_TTL_HOURS),
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def create_refresh_token(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_TTL_DAYS),
     }
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
@@ -158,8 +170,18 @@ class UserPublic(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserPublic
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 # ---------- Public routes ----------
@@ -187,13 +209,15 @@ async def get_status_checks():
 
 
 @api_router.post("/leads", response_model=Lead)
-async def create_lead(payload: LeadCreate):
+async def create_lead(payload: LeadCreate, background: BackgroundTasks):
     try:
         lead = Lead(**payload.model_dump())
         doc = lead.model_dump()
         doc["created_at"] = doc["created_at"].isoformat()
         await db.leads.insert_one(doc)
         logger.info(f"New lead captured: {lead.name} - {lead.phone} - source={lead.source}")
+        # Fire-and-forget SMS to dispatcher. No-ops gracefully if Twilio creds are blank.
+        background.add_task(send_lead_sms, lead.name, lead.phone, lead.issue, lead.source)
         return lead
     except Exception:
         logger.exception("Failed to create lead")
@@ -216,8 +240,10 @@ async def login(payload: LoginRequest, request: Request):
 
     await clear_attempts(identifier)
     token = create_access_token(user["id"], user["email"], user.get("role", "admin"))
+    refresh = create_refresh_token(user["id"])
     return LoginResponse(
         access_token=token,
+        refresh_token=refresh,
         user=UserPublic(
             id=user["id"],
             email=user["email"],
@@ -225,6 +251,23 @@ async def login(payload: LoginRequest, request: Request):
             role=user.get("role", "admin"),
         ),
     )
+
+
+@api_router.post("/auth/refresh", response_model=RefreshResponse)
+async def refresh_access(payload: RefreshRequest):
+    try:
+        decoded = jwt.decode(payload.refresh_token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    if decoded.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Wrong token type")
+    user = await db.users.find_one({"id": decoded["sub"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    new_access = create_access_token(user["id"], user["email"], user.get("role", "admin"))
+    return RefreshResponse(access_token=new_access)
 
 
 @api_router.get("/auth/me", response_model=UserPublic)

@@ -1,0 +1,48 @@
+{
+  "summary": "Iter 4: validated Twilio SMS no-op + JWT 24h + refresh_token endpoint + frontend refresh-flow. Backend 35/35 pytest passed (15 new tests for refresh + Twilio + 20 regression). Frontend: login stores both tokens, logout clears both, public landing/leads still work, brute-force lockout still trips at 6 (now keyed on email — iter-3 fix verified). ONE BUG FOUND: AdminDashboard.jsx synchronously checks getToken() and short-circuits to /admin/login before any API call is made — this defeats the axios silent-refresh interceptor in auth.js. With a valid refresh token but a missing/expired access token, the user is bounced to login instead of being transparently refreshed. The interceptor itself is wired correctly and /api/auth/refresh returns 200 — confirmed by direct fetch from the page.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Axios silent token refresh on 401",
+        "issue": "AdminDashboard.jsx (lines ~54 and ~105) does `const hasToken = Boolean(getToken())` and `if (!hasToken) return <Navigate to=\"/admin/login\" replace />`. This synchronous guard runs BEFORE any API call, so when the access token is missing/expired but a valid refresh token still exists in localStorage, the user is redirected to /admin/login and the response interceptor in auth.js never gets a chance to call /api/auth/refresh. Verified directly: posting {refresh_token: localStorage.tnp_refresh} to /api/auth/refresh from the dashboard returns 200 + a new access_token, so the backend + auth.js interceptor are correct — the dashboard's synchronous gate is the only thing breaking the silent-refresh UX.",
+        "affected_selectors": ["[data-testid=\"admin-logout\"] (page is unreachable when token expired)"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_refresh_and_sms.py",
+    "/app/backend/tests/test_auth_admin.py",
+    "/app/backend/tests/test_leads_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix AdminDashboard.jsx silent-refresh gate: instead of `if (!getToken()) <Navigate to=/admin/login>`, allow the component to mount whenever EITHER tnp_token OR tnp_refresh exists, and let the authAxios response interceptor handle the 401→refresh→retry. Suggested change: `const hasAnyToken = Boolean(getToken() || getRefreshToken()); if (!hasAnyToken) return <Navigate ...>`. The interceptor already handles the no-refresh case by clearing storage and redirecting.",
+    "Optional: cache JWT_SECRET at startup (currently re-read each call via _jwt_secret()).",
+    "Optional: tighten POST /api/leads broad try/except — pre-existing from iter 1."
+  ],
+  "critical_code_review_comments": [
+    "notifications.py: implementation is clean — REQUIRED_ENV_VARS guard, lazy twilio import so missing package never breaks boot, _truncate to keep SMS body short, never logs the auth token (only sid/status/to). Confirmed by unit test test_notifications_logs_never_contain_auth_token which mocks twilio.rest.Client and asserts the secret token string never appears in any log record.",
+    "server.py: BackgroundTasks is correctly used so POST /api/leads returns immediately and SMS dispatch happens after response. Verified runtime log shows 'Twilio not configured — skipping SMS for lead <phone>' for every blank-env lead.",
+    "server.py: ACCESS_TOKEN_TTL_HOURS=24 and REFRESH_TOKEN_TTL_DAYS=30 confirmed via JWT decode (delta within ±5 min and ±1 hr respectively).",
+    "server.py /api/auth/refresh: correctly returns 401 for invalid token, expired token, and access-typed token (detail='Wrong token type' confirmed). Returns 422 for missing body. Refreshed access token authenticates against /auth/me. ",
+    "auth.js interceptor logic is correct (single-flight refresh queue, isAuthCall guard to avoid loops, proper error path that clears storage). Bug is upstream in the dashboard guard.",
+    "AdminLogin.jsx correctly stores both data.access_token (setToken) and data.refresh_token (setRefreshToken) on success — verified in localStorage post-login.",
+    "Brute-force lockout: iter-3 fix verified. identifier='email:' + email so attempts now aggregate across pod IPs. 6th attempt = 429."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_refresh_and_sms.py (NEW — 15 tests covering JWT TTL, refresh endpoint, Twilio no-op, auth-token-not-logged)"
+  ],
+  "success_rate": {"backend": "100% (35/35)", "frontend": "75% (3/4 — login storage, logout-clears-both, public regression all PASS; silent-refresh interceptor flow FAIL due to dashboard guard)"},
+  "test_credentials": "admin@truenorthplumbing.ca / TrueNorth2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Added ~6 TEST_Iter4_* leads via POST /api/leads (each triggered the 'Twilio not configured' no-op log). MongoDB now has ~21 TEST_ leads total. login_attempts cleared at start; ~6 entries from brute-force test will exist (unique bait email).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "If main agent fixes the AdminDashboard.jsx guard, retest by: (1) login at /admin/login, (2) localStorage.removeItem('tnp_token') (keep tnp_refresh), (3) page.reload(), (4) assert URL stays at /admin and a new tnp_token is present. The /api/auth/refresh endpoint is fully working — direct fetch returns 200. Backend 35/35 pytest is the regression bar; rerun via: pytest backend/tests/ -v. Don't supply real Twilio creds; the no-op path + the mocked-Client unit test cover the full surface.",
+  "rca of the issue": "Frontend silent-refresh RCA — AdminDashboard.jsx renders synchronously with `const hasToken = Boolean(getToken())` and returns `<Navigate to='/admin/login' replace />` when hasToken is falsy. React-Router executes this redirect before any useEffect/API call fires, so the authAxios response interceptor (which would catch a 401 and trigger /api/auth/refresh) never gets the opportunity to run. The interceptor logic in /app/frontend/src/lib/auth.js is correct — it has the single-flight queue, the isAuthCall guard against refresh loops, and proper error fallback. The fix is one-line at the dashboard guard: allow mount when tnp_token OR tnp_refresh exists, and rely on the interceptor for the actual refresh + redirect-on-failure. Reproduction: login → DevTools → Application → localStorage → delete `tnp_token` (keep `tnp_refresh`) → reload /admin → user is bounced to /admin/login (BAD). Expected: stays on /admin, dashboard re-fetches, interceptor mints new tnp_token, list renders. Verification of fix: same steps, plus assert localStorage.tnp_token is repopulated and is a valid 24h JWT."
+}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import { Loader2, Lock } from "lucide-react";
-import { API, setToken, getToken, formatApiErrorDetail } from "@/lib/auth";
+import { API, setToken, setRefreshToken, getToken, formatApiErrorDetail } from "@/lib/auth";
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
@@ -22,6 +22,7 @@ export default function AdminLogin() {
     try {
       const { data } = await axios.post(`${API}/auth/login`, { email: email.trim(), password });
       setToken(data.access_token);
+      setRefreshToken(data.refresh_token);
       navigate("/admin", { replace: true });
     } catch (err) {
       setError(formatApiErrorDetail(err?.response?.data?.detail) || err.message);
