@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "@/App.css";
 import {
   Phone,
@@ -15,6 +16,8 @@ import {
 } from "lucide-react";
 import LeadFormModal from "@/components/LeadFormModal";
 import ChatWidget, { triggerChat } from "@/components/ChatWidget";
+import AdminLogin from "@/admin/AdminLogin";
+import AdminDashboard from "@/admin/AdminDashboard";
 
 const PHONE_DISPLAY = "(403) 555-0199";
 const PHONE_HREF = "tel:+14035550199";
@@ -357,7 +360,7 @@ function Footer() {
   );
 }
 
-function App() {
+function LandingPage() {
   const [leadOpen, setLeadOpen] = useState(false);
   const [leadSource, setLeadSource] = useState("hero_cta");
 
@@ -390,6 +393,18 @@ function App() {
 
       <ChatWidget />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

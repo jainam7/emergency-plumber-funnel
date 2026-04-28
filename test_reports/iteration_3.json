@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 3: validated JWT auth + protected /admin endpoints. Backend 19/20 pytest passed (the 1 failure is a real bug — brute-force lockout never trips behind k8s ingress because request.client.host varies across pod IPs, splitting the attempt counter). Frontend Playwright covered every required flow: redirect when unauthenticated, login form render, wrong-pw error, successful login + token in localStorage.tnp_token, dashboard table with 15 rows + user email, status dropdown PATCH (server reflected new status), all 5 filter tiles, search filtering, mobile cards <768px (table hidden, 15 cards), logout clears token, public landing page still works.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "Brute-force lockout (LOCKOUT_THRESHOLD=5) never fires behind the kubernetes ingress. Identifier is built as `${request.client.host}:${email}`, but request.client.host is the immediate proxy hop and the cluster load-balances across multiple backend pod IPs (observed 10.64.135.205 and 10.64.129.146 in login_attempts). 6 sequential wrong-password attempts produced 6×401 instead of 5×401 + 1×429. Fix options: (a) drop IP and lock per-email only, or (b) parse first IP from X-Forwarded-For header instead of request.client.host.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/leads (POST)",
+        "issue": "Broad try/except returns generic 500 — Pydantic 422s still surface correctly because validation runs before the handler, but the handler's catch-all could swallow useful errors. Pre-existing from iter 1."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_admin.py",
+    "/app/backend/tests/test_leads_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix brute-force lockout identifier so it works behind the k8s ingress — recommend keying on email only (per-account lockout) instead of IP+email, since pod-IP rotation defeats the current rate limit.",
+    "(Optional) Tighten POST /api/leads error handling to avoid swallowing genuine errors in a generic 500."
+  ],
+  "critical_code_review_comments": [
+    "server.py: brute-force counter is keyed on request.client.host which is the closest hop (a kube pod/proxy IP), not the real client IP. Behind any LB this halves+ the effective threshold or disables it entirely. Use email-only or X-Forwarded-For.",
+    "server.py: JWT is HS256 with secret read from env via _jwt_secret() at every call — fine, but consider caching once at startup. ACCESS_TOKEN_TTL_HOURS = 168 (7 days) is long for an admin tool; consider 24h with refresh.",
+    "server.py login: returns identical 401 for both unknown email and wrong password — good (no user enumeration). But it still records a failed attempt for unknown emails, which is correct.",
+    "auth.js axios interceptor: on 401 it does window.location.href = '/admin/login' which causes a hard reload — fine, but loses any unsaved state. Consider navigate() for SPA-friendly redirect.",
+    "AdminDashboard.jsx renders both desktop table and mobile cards via Tailwind responsive classes; both share data-testid prefixes (admin-lead-status-{id} for desktop, admin-lead-status-mobile-{id} for mobile). Acceptable, but worth noting for any future test-id scraping."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_admin.py (NEW)",
+    "/app/backend/tests/test_leads_api.py (added admin_session fixture; protected GET /api/leads)"
+  ],
+  "success_rate": {"backend": "95% (19/20)", "frontend": "100%"},
+  "test_credentials": "admin@truenorthplumbing.ca / TrueNorth2026! (from /app/memory/test_credentials.md, seeded at startup)",
+  "seed_data_creation": "Added ~5 TEST_ leads during this iteration (TEST_AuthIter_*, TEST_PatchValidate, TEST_PatchHappy, plus existing iter-1 TEST_ rows). MongoDB now has ~15 leads total. login_attempts cleared before pytest, then 6 entries from brute-force test (bait email).",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Brute-force lockout is the only outstanding bug. After main agent's fix, re-run pytest on /app/backend/tests/test_auth_admin.py — specifically test_zzz_brute_force_lockout. Note the test uses a unique bait email per run so it won't lock the real admin. Before re-running, clear DB state with: mongosh test_database --eval 'db.login_attempts.deleteMany({})'. All other auth + protected-endpoint + frontend flows are fully validated and stable.",
+  "rca of the issue": "Brute-force RCA — server.py:208 builds identifier=`${request.client.host}:${email}`. Inside Kubernetes, request.client.host resolves to whichever upstream proxy/pod last touched the connection, NOT the public client. Six sequential POSTs landed on at least two distinct backend pods (10.64.135.205 ×4 and 10.64.129.146 ×2 per the login_attempts collection), so neither identifier ever reached the threshold of 5 and check_lockout never raised 429. Reproduction: from any public client, POST 6× to /api/auth/login with wrong password — observe all 401s and inspect db.login_attempts to see split identifiers. Mitigation: change identifier to just `email.lower().strip()` (account-locking is the safer model anyway), OR parse `request.headers.get('x-forwarded-for', '').split(',')[0].strip()` and fall back to request.client.host."
+}

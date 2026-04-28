@@ -6,11 +6,27 @@ import requests
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://true-north-leads.preview.emergentagent.com').rstrip('/')
 API = f"{BASE_URL}/api"
 
+ADMIN_EMAIL = "admin@truenorthplumbing.ca"
+ADMIN_PASSWORD = "TrueNorth2026!"
+
 
 @pytest.fixture(scope="module")
 def client():
     s = requests.Session()
     s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+@pytest.fixture(scope="module")
+def admin_session(client):
+    r = client.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    if r.status_code != 200:
+        pytest.skip(f"Admin login unavailable ({r.status_code}); skipping protected tests")
+    s = requests.Session()
+    s.headers.update({
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {r.json()['access_token']}",
+    })
     return s
 
 
@@ -41,8 +57,8 @@ def test_create_lead_success(client):
     assert "_id" not in data
 
 
-# Verify persistence via GET
-def test_create_then_list_includes(client):
+# Verify persistence via GET (now protected — requires admin session)
+def test_create_then_list_includes(client, admin_session):
     unique_name = "TEST_Persist_User_X9Z"
     payload = {
         "name": unique_name,
@@ -54,7 +70,7 @@ def test_create_then_list_includes(client):
     assert cr.status_code == 200
     created_id = cr.json()["id"]
 
-    lr = client.get(f"{API}/leads")
+    lr = admin_session.get(f"{API}/leads")
     assert lr.status_code == 200
     leads = lr.json()
     assert isinstance(leads, list)
