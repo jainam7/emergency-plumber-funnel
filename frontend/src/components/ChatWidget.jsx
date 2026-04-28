@@ -64,6 +64,7 @@ export default function ChatWidget() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [typing, setTyping] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -71,6 +72,15 @@ export default function ChatWidget() {
     setMessages((m) => [...m, { from: "bot", text }]);
   const pushUser = (text) =>
     setMessages((m) => [...m, { from: "user", text }]);
+
+  // Show typing indicator briefly, then push the bot message
+  const botReply = (text, delay = 700) => {
+    setTyping(true);
+    setTimeout(() => {
+      setTyping(false);
+      pushBot(text);
+    }, delay);
+  };
 
   const resetChat = () => {
     setStep("service");
@@ -103,7 +113,7 @@ export default function ChatWidget() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, step]);
+  }, [messages, step, typing]);
 
   // Focus input when text-step opens
   useEffect(() => {
@@ -116,21 +126,17 @@ export default function ChatWidget() {
     pushUser(option.label);
     setData((d) => ({ ...d, service: option.id }));
     setStep("urgency");
-    setTimeout(() => pushBot("Got it. How soon do you need someone on-site?"), 300);
+    botReply("Got it. How soon do you need someone on-site?");
   };
 
   const handleUrgencyPick = (option) => {
     pushUser(option.label);
     setData((d) => ({ ...d, urgency: option.id }));
     setStep("name");
-    setTimeout(
-      () =>
-        pushBot(
-          option.id === "now"
-            ? "Understood — flagging as urgent. What's your name?"
-            : "Perfect. What's your name?"
-        ),
-      300
+    botReply(
+      option.id === "now"
+        ? "Understood — flagging as urgent. What's your name?"
+        : "Perfect. What's your name?"
     );
   };
 
@@ -144,7 +150,7 @@ export default function ChatWidget() {
     setError("");
     pushUser(name);
     setStep("phone");
-    setTimeout(() => pushBot(`Thanks ${name}. What's the best phone number to reach you?`), 300);
+    botReply(`Thanks ${name}. What's the best phone number to reach you?`);
   };
 
   const handleSubmitPhone = (e) => {
@@ -157,10 +163,7 @@ export default function ChatWidget() {
     setError("");
     pushUser(phone);
     setStep("details");
-    setTimeout(
-      () => pushBot("Last bit — any extra details about the issue? (e.g., where it's leaking, when it started)"),
-      300
-    );
+    botReply("Last bit — any extra details about the issue? (e.g., where it's leaking, when it started)");
   };
 
   const handleSubmitDetails = async (e) => {
@@ -307,6 +310,16 @@ export default function ChatWidget() {
                 </div>
               </div>
             ))}
+
+            {typing && (
+              <div className="flex justify-start" data-testid="chat-typing">
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-3 shadow-sm flex items-center gap-1">
+                  <span className="typing-dot inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  <span className="typing-dot inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  <span className="typing-dot inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
+                </div>
+              </div>
+            )}
 
             {/* Step controls inline at bottom of message stream */}
             {step === "service" && (
