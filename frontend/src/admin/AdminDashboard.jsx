@@ -8,7 +8,7 @@ import {
   Search,
   Inbox,
 } from "lucide-react";
-import { authAxios, getToken, clearToken, formatApiErrorDetail } from "@/lib/auth";
+import { authAxios, getToken, getRefreshToken, clearToken, formatApiErrorDetail } from "@/lib/auth";
 
 const STATUS_OPTIONS = [
   { value: "new", label: "New", color: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -51,7 +51,10 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
   const navigate = useNavigate();
-  const hasToken = Boolean(getToken());
+  // Allow mount if either access OR refresh token exists; the axios interceptor
+  // handles 401 → /api/auth/refresh → retry transparently. Hard redirect only
+  // when both are missing.
+  const hasAnyToken = Boolean(getToken() || getRefreshToken());
 
   const load = async () => {
     setLoading(true);
@@ -73,9 +76,9 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (hasToken) load();
+    if (hasAnyToken) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasToken]);
+  }, [hasAnyToken]);
 
   const stats = useMemo(() => {
     const counts = { all: leads.length, new: 0, contacted: 0, booked: 0, lost: 0 };
@@ -101,7 +104,7 @@ export default function AdminDashboard() {
     });
   }, [leads, filter, search]);
 
-  if (!hasToken) {
+  if (!hasAnyToken) {
     return <Navigate to="/admin/login" replace />;
   }
 
