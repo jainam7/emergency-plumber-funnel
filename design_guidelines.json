@@ -1,0 +1,78 @@
+{
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast (Adapted for Service Sector)",
+  "colors": {
+    "primary": "#0b3d91",
+    "accent": "#ff6b00",
+    "background": "#ffffff",
+    "surface": "#f8fafc",
+    "surface_alt": "#f1f5f9",
+    "text_primary": "#0f172a",
+    "text_secondary": "#475569",
+    "dark_bg": "#0b3d91",
+    "emergency_red": "#ef4444"
+  },
+  "typography": {
+    "font_family": "Inter, sans-serif",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter text-white leading-[1.1]",
+    "h2": "text-lg sm:text-xl font-medium tracking-tight text-slate-200 max-w-2xl",
+    "h3": "text-2xl font-extrabold tracking-tight text-slate-900",
+    "body": "text-base text-slate-600 leading-relaxed",
+    "button": "text-lg font-bold tracking-wide",
+    "nav_logo": "text-2xl font-black tracking-tighter text-[#0b3d91]"
+  },
+  "spacing": {
+    "section_padding": "py-20 px-6 md:px-12 lg:px-24",
+    "container": "max-w-7xl mx-auto w-full",
+    "gap": "gap-8"
+  },
+  "layout": {
+    "nav": "sticky top-0 z-50 bg-white border-b border-slate-200 py-4 w-full",
+    "hero": "relative bg-[#0b3d91] overflow-hidden flex flex-col-reverse lg:flex-row items-center",
+    "trust_banner": "bg-slate-50 py-10 border-b border-slate-200 w-full",
+    "services": "bg-white py-24 w-full",
+    "final_cta": "bg-[#0b3d91] py-24 text-center w-full",
+    "footer": "bg-slate-950 py-12 text-slate-400 text-sm w-full"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#ff6b00] hover:bg-[#e66000] text-white rounded-md px-8 py-4 transition-all duration-300 ai-chat-trigger shadow-[0_0_20px_rgba(255,107,0,0.4)] hover:shadow-[0_0_30px_rgba(255,107,0,0.6)] animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]",
+      "rules": "MUST include 'ai-chat-trigger' class. MUST be highly visible orange. Use for lead generation."
+    },
+    "cards": "bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 flex flex-col group",
+    "modal": "Use Shadcn Dialog for the lead form. Form fields: Name (Input), Phone (Input), Issue (Textarea), Submit (Button). Follow Shadcn structure."
+  },
+  "media": {
+    "hero_plumber": {
+      "url": "https://images.unsplash.com/photo-1732395805034-e0bf859665e5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwbHVtYmVyJTIwcG9ydHJhaXQlMjBzbWlsaW5nfGVufDB8fHx8MTc3NzM5MjU1Mnww&ixlib=rb-4.1.0&q=85",
+      "alt": "Professional smiling plumber in uniform standing confidently",
+      "placement": "Hero section right side on desktop, stacked top on mobile."
+    },
+    "service_leaks": {
+      "url": "https://images.pexels.com/photos/15206136/pexels-photo-15206136.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Burst pipe leaking water requiring emergency repair",
+      "placement": "Core Services: Emergency Leaks & Bursts card image"
+    },
+    "service_water_heater": {
+      "url": "https://images.unsplash.com/photo-1620653713380-7a34b773fef8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHx3YXRlciUyMGhlYXRlciUyMHJlcGFpciUyMHBsdW1iaW5nfGVufDB8fHx8MTc3NzM5MjU1Mnww&ixlib=rb-4.1.0&q=85",
+      "alt": "Plumber repairing water heater with tools",
+      "placement": "Core Services: Water Heater Repair & Install card image"
+    },
+    "service_drain": {
+      "url": "https://images.unsplash.com/photo-1676210134190-3f2c0d5cf58d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwxfHxwbHVtYmVyJTIwZml4aW5nJTIwa2l0Y2hlbiUyMHNpbmslMjBwaXBlfGVufDB8fHx8MTc3NzM5MjU1Mnww&ixlib=rb-4.1.0&q=85",
+      "alt": "Plumber fixing kitchen sink and drainage pipe",
+      "placement": "Core Services: Drain Cleaning & Unclogging card image"
+    }
+  },
+  "specific_instructions_to_agent": [
+    "Ensure bottom-right corner is strictly clear of any fixed elements (like scroll-to-top buttons) to leave room for a chat widget.",
+    "Add the class 'ai-chat-trigger' to ALL orange CTAs as requested by user.",
+    "Nav Bar Phone CTA MUST be red text to stand out as an emergency number (e.g., text-red-600 font-bold).",
+    "Trust Banner should be a horizontal row of three signals on desktop, stacking on mobile. Use Lucide icons (ShieldCheck, Star, Award) beside the text.",
+    "Hero CTA button must have a pulsing animation to indicate urgency (Tailwind animate-pulse is fine, or custom ping).",
+    "Do NOT add any complex 3D animations or heavy background videos. Keep the DOM light and extremely fast for mobile.",
+    "Implement a Shadcn Dialog containing a lead capture form (Name, Phone, Issue) when user clicks 'Get an Instant Estimate'. Save action can just simulate a backend save or log to console for now.",
+    "Every interactive element MUST have a data-testid attribute.",
+    "Use optical alignment and generous spacing. Do not clutter elements."
+  ]
+}
