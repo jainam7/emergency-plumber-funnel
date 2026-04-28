@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import LeadFormModal from "@/components/LeadFormModal";
+import ChatWidget, { triggerChat } from "@/components/ChatWidget";
 
 const PHONE_DISPLAY = "(403) 555-0199";
 const PHONE_HREF = "tel:+14035550199";
@@ -266,7 +267,7 @@ function Services({ onOpenLead }) {
                   {desc}
                 </p>
                 <button
-                  onClick={() => onOpenLead(`service_${testid}`)}
+                  onClick={() => onOpenLead(`service_card_${testid.replace("service-card-", "")}`)}
                   className="ai-chat-trigger mt-5 inline-flex items-center gap-1.5 text-[#0b3d91] font-bold text-sm hover:text-[#ff6b00] transition-colors group"
                   data-testid={`${testid}-cta`}
                 >
@@ -360,9 +361,10 @@ function App() {
   const [leadOpen, setLeadOpen] = useState(false);
   const [leadSource, setLeadSource] = useState("hero_cta");
 
+  // All orange .ai-chat-trigger CTAs route to the scripted chat widget.
+  // (LeadFormModal kept available as a programmatic fallback.)
   const openLead = (source = "hero_cta") => {
-    setLeadSource(source);
-    setLeadOpen(true);
+    triggerChat(source);
   };
 
   // Pre-fetch base API on mount (sanity ping, non-blocking)
@@ -385,6 +387,8 @@ function App() {
         onOpenChange={setLeadOpen}
         source={leadSource}
       />
+
+      <ChatWidget />
     </div>
   );
 }
